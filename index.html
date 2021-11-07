@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="./styles/css/reset.css">
+    <link rel="stylesheet" href="./styles/css/index.css">
+
+    <script>
+        class User {
+            constructor(login, bornDate, password) {
+                this.login = login;
+                this.bornDate = bornDate;
+                this.password = password;
+            }
+            static create(user) {
+                return new User(user.login, user['date_born'], null)
+            }
+        }
+
+
+        class UserServices {
+
+            getAll() {
+                return fetch(UserServices.BASE_URL + 'users')
+                    .then(response => response.json())
+                    .then(response => response.users)
+                    .then(users => users.map(user => User.create(user)));
+            }
+
+            register(user) {
+                return fetch(UserServices.BASE_URL + 'register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        login: user.login,
+                        date_born: user.bornDate,
+                        password: user.password
+                    })
+                }).then(response => response.json())
+            }
+
+            login(user) {
+                return fetch(UserServices.BASE_URL + 'login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        login: user.login,
+                        password: user.password
+                    })
+                }).then(response => response.json());
+            }
+        }
+
+        class ContactServices {
+            getAll() {
+                return fetch(UserServices.BASE_URL + 'contacts', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                })
+                    .then(r => r.json())
+                    .then(r => r.contacts)
+            }
+
+            addContact(con) {
+                return fetch(UserServices.BASE_URL + 'contacts/add', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        type: con.type,
+                        value: con.value,
+                        name: con.name
+                    })
+                }).then(r => r.json())
+            }
+        }
+
+        UserServices.BASE_URL = 'https://mag-contacts-api.herokuapp.com/';
+
+        class RegisterForm {
+            constructor(selector, userService) {
+                this.selector = selector;
+                this.userService = userService;
+                document.addEventListener('DOMContentLoaded', () => {
+                    this.init();
+                    this.bind();
+                })
+            }
+
+            init() {
+                this.wrapper = document.querySelector('.container')
+                this.container = document.querySelector(this.selector);
+                this.loginInput = this.container.querySelector('#login-reg');
+                this.bornInput = this.container.querySelector('#date_born-reg');
+                this.passwordInput = this.container.querySelector('#password-reg');
+                this.button = this.container.querySelector('.btn');
+                this.exit = document.querySelector('.btn-exit');
+            }
+
+            bind() {
+                this.button.addEventListener('click', () => this.register())
+            }
+
+            register() {
+                let user = new User(
+                    this.loginInput.value,
+                    this.bornInput.value,
+                    this.passwordInput.value
+                );
+                this.userService.register(user).then(response => {
+                    if (response.status == 'error')
+                        this.registerError(response.error);
+                    else this.succsessRegister();
+                })
+
+            }
+
+            registerError(text) {
+                alert(text);
+            }
+
+            succsessRegister() {
+                this.clearForm();
+                this.wrapper.style.display = 'none';
+                this.exit.style.display = 'block';
+            }
+
+            clearForm() {
+                this.loginInput.value = '';
+                this.bornInput.value = '';
+                this.passwordInput.value = '';
+            }
+
+        }
+
+
+
+        class LoginForm {
+            constructor(selector, userService) {
+                this.selector = selector;
+                this.userService = userService;
+                this.onLogin = () => { };
+                document.addEventListener('DOMContentLoaded', () => {
+                    this.init();
+                    this.bind();
+                })
+            }
+
+            init() {
+                this.wrapper = document.querySelector('.container');
+                this.exit = document.querySelector('.btn-exit');
+                this.container = document.querySelector(this.selector);
+                this.loginInput = this.container.querySelector('#login-log');
+                this.passwordInput = this.container.querySelector('#password-log');
+                this.button = this.container.querySelector('.btn');
+            }
+
+            bind() {
+                this.button.addEventListener('click', () => this.login())
+            }
+
+            login() {
+                let user = new User(
+                    this.loginInput.value,
+                    null,
+                    this.passwordInput.value
+                );
+                this.userService.login(user).then(response => {
+                    if (response.status == 'error')
+                        this.loginError(response.error);
+                    localStorage.setItem('token', response.token);
+                    this.succsessLogin();
+                    // localStorage.clear();
+
+                })
+            }
+
+            loginError(text) {
+                alert(text);
+            }
+
+            clearForm() {
+                this.loginInput.value = '';
+                this.passwordInput.value = '';
+            }
+
+            succsessLogin() {
+                this.wrapper.style.display = 'none';
+                this.exit.style.display = 'block';
+                document.querySelector('.contacts').style.display = 'flex';
+                this.clearForm();
+                this.onLogin();
+            }
+        }
+
+
+
+        class Contact {
+            constructor(value, name, type, id) {
+                this.value = value;
+                this.name = name;
+                this.type = type;
+                this.id = id;
+            }
+
+            createContact(contact) {
+                let contactElem = document.createElement('div');
+                contactElem.classList.add('contact-item');
+                contactElem.dataset.index = contact.id;
+                contactElem.insertAdjacentHTML('beforeend', '<img class="show-elem" src="./assets/img/phonebook.png" alt="X">');
+
+                contactElem.append(`${contact.name}`);
+
+                if (contact.id == activeContact) {
+                    contactElem.classList.add('active');
+                }
+
+                return contactElem;
+            }
+
+            showContact() {
+                document.querySelector('.contacts-list').innerHTML = '';
+                let elem = this.contact.map((contact) => this.createContact(contact));
+                document.querySelector('.contacts-list').append(...elem);
+            }
+
+            createContactInfo(contact) {
+                let contactElem = document.createElement('div');
+                contactElem.classList.add('none');
+
+                if (contact.id == activeContact) {
+                    contactElem.classList.remove('none');
+                    contactElem.classList.add('activeContact');
+                }
+
+                let name = document.createElement('div');
+                name.innerHTML = 'Имя: ' + contact.name;
+
+                let type = document.createElement('div');
+                type.innerHTML = 'Тип: ' + contact.type;
+
+                let value = document.createElement('div');
+                value.innerHTML = 'Контакт: ' + contact.value;
+
+
+                contactElem.append(name, type, value);
+                contactElem.classList.add('contact-item');
+
+                return contactElem;
+            }
+
+            showContactInfo() {
+                document.querySelector('.contacts-show').innerHTML = '';
+                let elem = this.contact.map((c) => this.createContactInfo(c));
+                document.querySelector('.contacts-show').append(...elem);
+            }
+
+            update() {
+                contactService.getAll().then(contact => {
+                    this.contact = contact;
+                    this.showContact(this.contact);
+                    this.showContactInfo(this.contact);
+                });
+            }
+        }
+
+        let activeContact = null;
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.matches('.show-elem')) return;
+            let index = e.target.parentNode.dataset.index;
+            activeContact = index;
+            contact.showContact();
+            contact.showContactInfo();
+            activeContact = null;
+        })
+
+
+
+
+        class AddContact {
+            constructor(selector, contactService) {
+                this.selector = selector;
+                this.contactService = contactService;
+                this.onAdd = () => { }
+                document.addEventListener(
+                    "DOMContentLoaded",
+                    () => {
+                        this.init();
+                        this.binds();
+                    }
+                );
+            }
+
+            init() {
+                this.container = document.querySelector(this.selector);
+                this.name = this.container.querySelector('#name');
+                this.type = this.container.querySelector('#type');
+                this.value = this.container.querySelector('#value');
+                this.addBtn = this.container.querySelector('.btn');
+            }
+
+            binds() {
+                this.addBtn.addEventListener('click', () => this.add());
+            }
+
+            add() {
+                if (this.value.value == '' || this.name.value == '' || this.type.value == '') {
+                    alert('Заполните поля')
+                } else {
+                    let contact = new Contact(
+                        this.value.value,
+                        this.name.value,
+                        this.type.value,
+                    );
+                    this.contactService.addContact(contact).then(response => {
+                        if (response.status === "error") this.addError(response.error);
+                        else this.successAdd();
+                    })
+                }
+
+            }
+
+            addError(text) {
+                alert(text);
+            }
+
+            successAdd() {
+                this.clearForm();
+                this.onAdd();
+            }
+
+            clearForm() {
+                this.name.value = ''
+                this.value.value = ''
+            }
+        }
+
+
+        window.addEventListener('DOMContentLoaded', () => {
+            let exit = document.querySelector('.btn-exit');
+            exit.addEventListener('click', () => {
+                document.querySelector('.contacts').style.display = 'none';
+                document.querySelector('.container').style.display = 'flex';
+                exit.style.display = 'none'
+            })
+        })
+
+
+
+        let userService = new UserServices();
+        let contactService = new ContactServices();
+        let contact = new Contact();
+        let registerForm = new RegisterForm('.register', userService);
+        let loginForm = new LoginForm('.login', userService);
+        loginForm.onLogin = () => {
+            contact.update()
+        }
+        let addContact = new AddContact('.contacts-info', contactService);
+        addContact.onAdd = () => {
+            contact.update()
+        }
+    </script>
+</head>
+
+<body>
+    <div class="wrapper">
+        <div class="title">
+            <p>my phone book</p>
+            <button class="btn btn-exit">Exit</button>
+        </div>
+        <div class="container flex">
+            <div class="register">
+                <h2>
+                    registration
+                </h2>
+                <div class="form-control">
+                    <input type="text" class="input" id="login-reg" placeholder="Login">
+                </div>
+
+                <div class="form-control">
+                    <input type="text" class="input" id="date_born-reg" placeholder="Birth date">
+                </div>
+
+                <div class="form-control">
+                    <input type="password" class="input" id="password-reg" placeholder="Password">
+                </div>
+
+                <div class="form-control btn-pos">
+                    <button class="btn">register</button>
+                </div>
+            </div>
+
+            <div class="login">
+                <h2>
+                    login
+                </h2>
+                <div class="form-control">
+                    <input type="text" class="input" id="login-log" placeholder="Login">
+                </div>
+
+                <div class="form-control">
+                    <input type="password" class="input" id="password-log" placeholder="Password">
+                </div>
+
+                <div class="form-control btn-pos">
+                    <button class="btn btn-login">login</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="contacts flex">
+            <div class="contacts-info">
+
+                <div class="form-control">
+                    <label for="name">Name:</label>
+                    <input type="text" class="input" id="name">
+                </div>
+
+                <div class="form-control">
+                    <label for="type">Phone/e-mail:</label>
+                    <select class="input" id="type">
+                        <option>phone</option>
+                        <option>email</option>
+                    </select>
+                </div>
+
+                <div class="form-control">
+                    <label for="value">Contact:</label>
+                    <input type="email" class="input" id="value">
+                </div>
+
+                <div class="form-control btn-pos">
+                    <button class="btn btn-login">Add contact</button>
+                </div>
+            </div>
+
+            <div class="contacts-list">
+            </div>
+
+            <div class="contacts-show">
+            </div>
+
+        </div>
+    </div>
+    </div>
+
+</body>
+
+</html>
